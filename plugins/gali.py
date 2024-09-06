@@ -129,7 +129,7 @@ GALI = [
 
 
 @app.on_message(
-    filters.command(["gali", "ali"] prefixes=["/", "!", "%", ",", "-", ".", "@", "#", "g", "G"])
+    filters.command(["gali", "ali"], prefixes=["/", "!", "%", ",", "-", ".", "@", "#", "g", "G"])
     & filters.private
 )
 async def help(client: Client, message: Message):
@@ -139,7 +139,7 @@ async def help(client: Client, message: Message):
 
 
 @app.on_message(
-    filters.command(["gali", "ali"] prefixes=["/", "!", "%", ",", "-", ".", "@", "#", "g", "G"])
+    filters.command(["gali", "ali"], prefixes=["/", "!", "%", ",", "-", ".", "@", "#", "g", "G"])
     & filters.group
 )
 async def help(client: Client, message: Message):
