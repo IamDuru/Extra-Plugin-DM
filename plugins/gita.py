@@ -255,7 +255,7 @@ GITA = [
 
 
 @app.on_message(
-    filters.command(["gita", "ata"], prefixes=["/", "!", "%", ",", "-", ".", "@", "#", "g", "G"])
+    filters.command(["gita", "ita"], prefixes=["/", "!", "%", ",", "-", ".", "@", "#", "g", "G"])
     & filters.private
 )
 async def help(client: Client, message: Message):
@@ -265,7 +265,7 @@ async def help(client: Client, message: Message):
 
 
 @app.on_message(
-    filters.command(["gita", "ata"], prefixes=["/", "!", "%", ",", "-", ".", "@", "#", "g", "G"])
+    filters.command(["gita", "ita"], prefixes=["/", "!", "%", ",", "-", ".", "@", "#", "g", "G"])
     & filters.group
 )
 async def help(client: Client, message: Message):
