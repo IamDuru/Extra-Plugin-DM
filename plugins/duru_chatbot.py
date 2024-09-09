@@ -32,7 +32,6 @@ EMOJI_LIST = [
     "🍓", "💀", "👨‍🏫", "🤝", "☠️", "🎯", "🍕", "🦾", "🔥", "💃"
 ]
 
-# Add a list of sticker file_ids. You'll need to send these stickers to the bot first and get their file_ids.
 STICKER_FILE_IDS = [
     "CAACAgIAAxkBAAEJL5FkZM7RRVadGorxiD9w47-4HUvzXgACbgADr8ZRGmTn_PAl6RC7LwQ",
     "CAACAgIAAxkBAAEJL5NkZM7TTzTGpK_Ecs3zyCwI8ZRu8gACFwADwDZPE_lqX5qCa011LwQ",
@@ -40,13 +39,39 @@ STICKER_FILE_IDS = [
 ]
 
 class RateLimiter:
-    # ... (keep the RateLimiter class as is)
+    def __init__(self, rate: int):
+        self.rate = rate
+        self.allowance = rate
+        self.last_check = 0
+
+    async def wait(self):
+        current = asyncio.get_event_loop().time()
+        time_passed = current - self.last_check
+        self.last_check = current
+        self.allowance += time_passed * self.rate
+        if self.allowance > self.rate:
+            self.allowance = self.rate
+        if self.allowance < 1:
+            await asyncio.sleep(1 - self.allowance / self.rate)
+            self.allowance = 0
+        else:
+            self.allowance -= 1
 
 rate_limiter = RateLimiter(RATE_LIMIT)
 
 @cached(ttl=CACHE_TTL)
 async def to_fancy_text(text: str) -> str:
-    # ... (keep the to_fancy_text function as is)
+    fancy_chars = {
+        'a': '𝓪', 'b': '𝓫', 'c': '𝓬', 'd': '𝓭', 'e': '𝓮', 'f': '𝓯', 'g': '𝓰', 'h': '𝓱',
+        'i': '𝓲', 'j': '𝓳', 'k': '𝓴', 'l': '𝓵', 'm': '𝓶', 'n': '𝓷', 'o': '𝓸', 'p': '𝓹',
+        'q': '𝓺', 'r': '𝓻', 's': '𝓼', 't': '𝓽', 'u': '𝓾', 'v': '𝓿', 'w': '𝔀', 'x': '𝔁',
+        'y': '𝔂', 'z': '𝔃', 'A': '𝓐', 'B': '𝓑', 'C': '𝓒', 'D': '𝓓', 'E': '𝓔', 'F': '𝓕',
+        'G': '𝓖', 'H': '𝓗', 'I': '𝓘', 'J': '𝓙', 'K': '𝓚', 'L': '𝓛', 'M': '𝓜', 'N': '𝓝',
+        'O': '𝓞', 'P': '𝓟', 'Q': '𝓠', 'R': '𝓡', 'S': '𝓢', 'T': '𝓣', 'U': '𝓤', 'V': '𝓥',
+        'W': '𝓦', 'X': '𝓧', 'Y': '𝓨', 'Z': '𝓩'
+    }
+
+    return ''.join(fancy_chars.get(char, char) for char in text)
 
 def contains_link(text: str) -> bool:
     return bool(re.search(r'http[s]?://', text))
@@ -87,7 +112,6 @@ async def process_message(message: Message) -> None:
         if x:
             formatted_response = await format_response(truncate_text(x))
             
-            # Create inline keyboard
             keyboard = InlineKeyboardMarkup([
                 [InlineKeyboardButton("🔄 Regenerate", callback_data="regenerate"),
                  InlineKeyboardButton("👍 Like", callback_data="like"),
@@ -102,7 +126,6 @@ async def process_message(message: Message) -> None:
                     quote=True
                 )
             else:
-                # Chance to send a sticker along with the text response
                 if random.random() < STICKER_CHANCE:
                     sticker_file_id = random.choice(STICKER_FILE_IDS)
                     await message.reply_sticker(sticker_file_id)
@@ -137,16 +160,25 @@ async def gemini_group_handler(client, message: Message) -> None:
 @app.on_callback_query()
 async def callback_query_handler(client, callback_query):
     if callback_query.data == "regenerate":
-        # Regenerate the response
         await process_message(callback_query.message.reply_to_message)
     elif callback_query.data == "like":
         await callback_query.answer("Thanks for your feedback! 😊")
     elif callback_query.data == "dislike":
         await callback_query.answer("We're sorry to hear that. We'll try to improve! 😔")
 
-    # Remove the inline keyboard after user interaction
     await callback_query.message.edit_reply_markup(reply_markup=None)
 
-# Helper function to split long messages
 async def send_long_message(chat_id: int, text: str, reply_to_message_id: Optional[int] = None):
-    # ... (keep the send_long_message function as is)
+    chunks = [text[i:i+MAX_MESSAGE_LENGTH] for i in range(0, len(text), MAX_MESSAGE_LENGTH)]
+    for i, chunk in enumerate(chunks):
+        try:
+            if i == 0:
+                await app.send_message(chat_id, chunk, reply_to_message_id=reply_to_message_id)
+            else:
+                await app.send_message(chat_id, chunk)
+        except FloodWait as e:
+            await asyncio.sleep(e.x)
+            if i == 0:
+                await app.send_message(chat_id, chunk, reply_to_message_id=reply_to_message_id)
+            else:
+                await app.send_message(chat_id, chunk)
