@@ -21,6 +21,7 @@ MAX_RETRIES = 3
 CACHE_TTL = 3600  # 1 hour
 RATE_LIMIT = 5  # requests per second
 MAX_MESSAGE_LENGTH = 4096  # Telegram's max message length
+STICKER_CHANCE = 0.3  # 30% chance to send a sticker
 
 EMOJI_LIST = [
     "👍", "👎", "❤️", "🔥", "🥳", "👏", "😁", "😂", "😲", "😱", 
@@ -31,37 +32,21 @@ EMOJI_LIST = [
     "🍓", "💀", "👨‍🏫", "🤝", "☠️", "🎯", "🍕", "🦾", "🔥", "💃"
 ]
 
-class RateLimiter:
-    def __init__(self, rate: int):
-        self.rate = rate
-        self.allowance = rate
-        self.last_check = 0
+# Add a list of sticker file_ids. You'll need to send these stickers to the bot first and get their file_ids.
+STICKER_FILE_IDS = [
+    "CAACAgIAAxkBAAEJL5FkZM7RRVadGorxiD9w47-4HUvzXgACbgADr8ZRGmTn_PAl6RC7LwQ",
+    "CAACAgIAAxkBAAEJL5NkZM7TTzTGpK_Ecs3zyCwI8ZRu8gACFwADwDZPE_lqX5qCa011LwQ",
+    # Add more sticker file_ids here
+]
 
-    async def wait(self):
-        current = asyncio.get_event_loop().time()
-        time_passed = current - self.last_check
-        self.last_check = current
-        self.allowance += time_passed * self.rate
-        if self.allowance > self.rate:
-            self.allowance = self.rate
-        if self.allowance < 1:
-            await asyncio.sleep(1 - self.allowance / self.rate)
-            self.allowance = 0
-        else:
-            self.allowance -= 1
+class RateLimiter:
+    # ... (keep the RateLimiter class as is)
 
 rate_limiter = RateLimiter(RATE_LIMIT)
 
 @cached(ttl=CACHE_TTL)
 async def to_fancy_text(text: str) -> str:
-    fancy_chars = {
-        'a': 'ᴀ', 'b': 'ʙ', 'c': 'ᴄ', 'd': 'ᴅ', 'e': 'ᴇ', 'f': 'ғ', 'g': 'ɢ', 'h': 'ʜ',
-        'i': 'ɪ', 'j': 'ᴊ', 'k': 'ᴋ', 'l': 'ʟ', 'm': 'ᴍ', 'n': 'ɴ', 'o': 'ᴏ', 'p': 'ᴘ',
-        'q': 'ǫ', 'r': 'ʀ', 's': 's', 't': 'ᴛ', 'u': 'ᴜ', 'v': 'ᴠ', 'w': 'ᴡ', 'x': 'x',
-        'y': 'ʏ', 'z': 'ᴢ'
-    }
-
-    return ''.join(fancy_chars.get(char, char) for char in text)
+    # ... (keep the to_fancy_text function as is)
 
 def contains_link(text: str) -> bool:
     return bool(re.search(r'http[s]?://', text))
@@ -77,15 +62,19 @@ def truncate_text(text: str, max_length: int = MAX_MESSAGE_LENGTH) -> str:
         return text
     return text[:max_length-3] + "..."
 
-async def react_with_random_emoji(message: Message) -> None:
+async def react_with_emoji_or_sticker(message: Message) -> None:
     try:
-        emoji = random.choice(EMOJI_LIST)
-        await app.send_reaction(message.chat.id, message.id, emoji)
+        if random.random() < STICKER_CHANCE:
+            sticker_file_id = random.choice(STICKER_FILE_IDS)
+            await message.reply_sticker(sticker_file_id)
+        else:
+            emoji = random.choice(EMOJI_LIST)
+            await app.send_reaction(message.chat.id, message.id, emoji)
     except Exception as e:
-        logger.warning(f"Failed to send reaction: {str(e)}")
+        logger.warning(f"Failed to send reaction or sticker: {str(e)}")
 
 async def process_message(message: Message) -> None:
-    await react_with_random_emoji(message)
+    await react_with_emoji_or_sticker(message)
     await app.send_chat_action(message.chat.id, ChatAction.TYPING)
     
     user_input = message.text.strip()
@@ -113,6 +102,10 @@ async def process_message(message: Message) -> None:
                     quote=True
                 )
             else:
+                # Chance to send a sticker along with the text response
+                if random.random() < STICKER_CHANCE:
+                    sticker_file_id = random.choice(STICKER_FILE_IDS)
+                    await message.reply_sticker(sticker_file_id)
                 await message.reply_text(
                     formatted_response,
                     reply_markup=keyboard,
@@ -134,8 +127,10 @@ async def gemini_group_handler(client, message: Message) -> None:
 
     if message.text:
         if message.reply_to_message and message.reply_to_message.from_user.username == bot_username:
+            await react_with_emoji_or_sticker(message)
             await process_message(message)
         elif f"@{bot_username}" in message.text:
+            await react_with_emoji_or_sticker(message)
             message.text = message.text.replace(f"@{bot_username}", "").strip()
             await process_message(message)
 
@@ -154,16 +149,4 @@ async def callback_query_handler(client, callback_query):
 
 # Helper function to split long messages
 async def send_long_message(chat_id: int, text: str, reply_to_message_id: Optional[int] = None):
-    chunks = [text[i:i+MAX_MESSAGE_LENGTH] for i in range(0, len(text), MAX_MESSAGE_LENGTH)]
-    for i, chunk in enumerate(chunks):
-        try:
-            if i == 0:
-                await app.send_message(chat_id, chunk, reply_to_message_id=reply_to_message_id)
-            else:
-                await app.send_message(chat_id, chunk)
-        except FloodWait as e:
-            await asyncio.sleep(e.x)
-            if i == 0:
-                await app.send_message(chat_id, chunk, reply_to_message_id=reply_to_message_id)
-            else:
-                await app.send_message(chat_id, chunk)
+    # ... (keep the send_long_message function as is)
