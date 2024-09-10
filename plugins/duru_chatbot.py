@@ -5,7 +5,7 @@ from MukeshAPI import api
 from pyrogram import filters
 from pyrogram.enums import ChatAction, ParseMode
 from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from VIPMUSIC import app
+from DuruMusic import app
 
 # List of supported emojis for reactions
 EMOJI_LIST = [
